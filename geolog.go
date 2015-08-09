@@ -62,27 +62,26 @@ func main() {
 	}
 
 	for email := range travelers {
+		fmt.Println("Evaluating traveler", email)
 		tvl := travelers[email]
 		tvl.AlertDistance = *geoDistThreshold
-		gc, err := find_geocenter(travelers[email], *googleKey)
+		tvl.Geocenter, err = find_geocenter(tvl, *googleKey)
 		if err != nil {
 			panic(err)
 		}
-		tvl.Geocenter = gc
-		for _, loc := range travelers[email].Locations {
-			geodist := km_between_two_points(loc.Latitude, loc.Longitude, gc.Latitude, gc.Longitude)
+		for _, loc := range tvl.Locations {
+			geodist := km_between_two_points(loc.Latitude, loc.Longitude, tvl.Geocenter.Latitude, tvl.Geocenter.Longitude)
 			if geodist > tvl.AlertDistance {
 				alert := fmt.Sprintf("in %s, %s connected from %s %.0f times; srcip='%s' (%.6f,%.6f) was %.0fkm away from usual connection center ",
 					loc.Date.Format("2006/01"), email, loc.Locality, loc.Weight, loc.IP, loc.Latitude, loc.Longitude, geodist)
-				if gc.Locality != "" {
-					alert += fmt.Sprintf("in %s ", gc.Locality)
+				if tvl.Geocenter.Locality != "" {
+					alert += fmt.Sprintf("in %s ", tvl.Geocenter.Locality)
 				}
-				alert += fmt.Sprintf("(%.6f,%.6f)\n", gc.Latitude, gc.Longitude)
+				alert += fmt.Sprintf("(%.6f,%.6f)\n", tvl.Geocenter.Latitude, tvl.Geocenter.Longitude)
 				fmt.Println(alert)
 				tvl.Alerts = append(tvl.Alerts, alert)
 			}
 		}
-		travelers[email] = tvl
 		if *mapsPath != "" {
 			make_traveler_map(tvl, *mapsPath)
 		}
@@ -98,7 +97,7 @@ func parse_travelers_logs(src string, maxmind *geo.Reader) (travelers map[string
 	travelers = make(map[string]Traveler)
 
 	date := regexp.MustCompile(`^(201[1-5]/(0|1)[0-9])$`)
-	email := regexp.MustCompile(`^  ([0-9a-zA-Z].+)$`)
+	email := regexp.MustCompile(`^  (\S.+@.+)$`)
 	hits := regexp.MustCompile(`\s+([0-9]{1,10})\s([0-9].+)$`)
 	fd, err := os.Open(src)
 	if err != nil {
@@ -155,7 +154,6 @@ func parse_travelers_logs(src string, maxmind *geo.Reader) (travelers map[string
 			travelers[cemail] = tvl
 		}
 	}
-
 	return
 }
 
